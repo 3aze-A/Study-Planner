@@ -1,22 +1,33 @@
 from contextlib import asynccontextmanager
-
+from enum import Enum
 from fastapi import FastAPI, HTTPException
-from sqlmodel import SQLModel, Field, create_engine, select, Session
+from sqlmodel import SQLModel, Field, create_engine, select, Session, Column, Enum as SQLEnum
 
 
 # uvicorn main:app --reload
 # fastapi dev main.py
+
+
 
 # SQL Model setup
 """
 Notes:
 - SQLModel is a library that combines the features of SQLAlchemy and Pydantic.
 """
+# Defining fixed enum values for 'priority' field
+class TaskPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+# ---------
 
 class TaskBase(SQLModel):
     title: str = Field(index=True)
     due_date: str | None = Field(default=None, index=True)
-    priority: str | None = Field(default="medium")
+    priority: TaskPriority = Field(
+        sa_column=Column(SQLEnum(TaskPriority), nullable=False, default=TaskPriority.MEDIUM)
+        )
     completed: bool = Field(default=False)
 
 # since table=True, this class will be used to create a table in the database., and id is optional because when we create a new task (using CreateTask), 
