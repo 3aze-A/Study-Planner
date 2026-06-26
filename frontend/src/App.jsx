@@ -1,8 +1,15 @@
 import './App.css'
+import Home from "./pages/Home"
+
+// @ts-check
+
+// @ts-ignore
 
 function App() {
   return (
-  <div></div>
+    <>
+      <Home />
+    </>
   )
 }
 
