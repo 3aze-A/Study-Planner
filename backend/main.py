@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from enum import Enum
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, Field, create_engine, select, Session, Column, Enum as SQLEnum
 
 
@@ -64,6 +65,7 @@ engine = create_engine(sqlite_url, echo=True, connect_args=connect_args)
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
+#-------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -73,6 +75,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+# Allowing certain origins to share resources
+# Allowing the frontend to connect to the backend
+origins = [
+    "http://localhost:5173"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+#-------------------------------------------------------
 
 # reponse_model=TaskPublic defines the schema / format of the response that this endpoint will return.
 @app.post("/tasks", response_model=TaskPublic)
