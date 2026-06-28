@@ -16,8 +16,8 @@ function TaskCard({task}) { // task is an object/dict
             </div>
         </div>
         <div className="task-info">
-            <h3>{task.priority}</h3>
-            <p>{String(task.completed)}</p>
+            <h3>Priority: {task.priority}</h3>
+            <p>{task.description}<br></br>{String(task.completed)}</p>
         </div>
     </div>
 }
