@@ -1,4 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
 :root {
+  /* ── Backgrounds ── */
+  --bg:           #0f0d0b;
+  --bg-surface:   #1c1814;
+  --bg-surface-2: #251f19;
+  --bg-modal:     #1f1b16;
+
+  /* ── Borders ── */
+  --border:       #2e2820;
+  --border-focus: #f0a030;
+
+  /* ── Text ── */
+  --text:         #9c9189;
+  --text-h:       #f0ebe4;
+  --text-muted:   #635855;
+
+  /* ── Accent ── */
+  --amber:        #f0a030;
+  --amber-dim:    rgba(240, 160, 48, 0.12);
+
+  /* ── Priority ── */
+  --priority-high:        #e05252;
+  --priority-high-dim:    rgba(224, 82, 82, 0.12);
+  --priority-medium:      #f0a030;
+  --priority-medium-dim:  rgba(240, 160, 48, 0.12);
+  --priority-low:         #7aad8e;
+  --priority-low-dim:     rgba(122, 173, 142, 0.12);
+
+  /* ── Sage (completed / success) ── */
+  --sage: #7aad8e;
+
+  /* ── Shadows ── */
+  --shadow-sm:    0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-card:  0 4px 24px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.75);
+
+  /* ── Typography ── */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+
+  /* ── Spacing ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ── Radius ── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* ── Transitions ── */
+  --transition:      0.2s ease;
+  --transition-slow: 0.35s ease;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100svh;
+  width: 100%;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  color: var(--text-h);
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
+button {
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+
+
+/* :root {
   --text: #6b6375;
   --text-h: #08060d;
   --bg: #fff;
@@ -108,4 +214,4 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
-}
+} */

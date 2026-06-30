@@ -4,3 +4,7 @@ A study planning tool to store tasks with their titles, descriptions, due dates,
 
 ## Tech Stack:
 - FastAPI, SQL, JS, HTML, React
+
+
+UI Update:
+![alt text](screenshots/image.png)
