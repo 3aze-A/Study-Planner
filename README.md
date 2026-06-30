@@ -1,7 +1,6 @@
 # Study Planner
 
-A study planning tool to store tasks with their names, due dates, priorities, and whether 
-they are completed or not. Back-end is completed.
+A study planning tool to store tasks with their titles, descriptions, due dates, priorities. Back-end is completed. Connected frontend with backend. Working on polishing the frontend.
 
 ## Tech Stack:
-- FastAPI, SQL
+- FastAPI, SQL, JS, HTML, React
