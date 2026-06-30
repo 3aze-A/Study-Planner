@@ -25,6 +25,7 @@ class TaskPriority(str, Enum):
 
 class TaskBase(SQLModel):
     title: str = Field(index=True)
+    description: str | None = Field(default=None)
     due_date: str | None = Field(default=None, index=True)
     priority: TaskPriority = Field(
         sa_column=Column(SQLEnum(TaskPriority), nullable=False, default=TaskPriority.MEDIUM)
@@ -50,6 +51,7 @@ class TaskPublic(TaskBase):
 # This is almost the same as TaskBase, but all the fields are optional, so we can't simply inherit from TaskBase.
 class TaskUpdate(SQLModel):
     title: str | None = None
+    description: str | None = None
     due_date: str | None = None
     priority: str | None = None
     completed: bool | None = None
