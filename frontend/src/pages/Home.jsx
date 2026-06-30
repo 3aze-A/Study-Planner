@@ -1,6 +1,6 @@
 import TaskCard from "../components/TaskCard"
 import {useState, useEffect} from "react"
-import {getTasks, createTask} from "../services/api"
+import {getTasks, createTask, updateCompleted} from "../services/api"
 // @ts-check
 
 // @ts-ignore
@@ -15,12 +15,11 @@ function Home() {
     //     {id: 2, title: "MAT", due_date:"2020", priority:"medium", completed:true},
     //     {id: 3, title: "STA", due_date:"2027", priority:"medium", completed:true},
     // ]
-    // Add Task Form Fields States:
+    // Add Task Form's Fields States:
      const [titleQuery, setTitleQuery] = useState("");
      const [descriptionQuery, setDescriptionQuery] = useState("");
      const [duedateQuery, setDueDateQuery] = useState("");
      const [priorityQuery, setPriorityQuery] = useState("");
-     const [completedQuery, setCompletedQuery] = useState("");
 
      
     useEffect(() =>{
@@ -44,8 +43,8 @@ function Home() {
     const handleAddTask = async () => {
         try {
             const task = await createTask(titleQuery, descriptionQuery, duedateQuery, priorityQuery, 
-            completedQuery === "" ? false : completedQuery)  // returns TaskPublic with an id
-
+            false)  // returns TaskPublic with an id and 'completed' is false by default
+            // Didnt delete the task's id as .map() uses task.id as the 'key' prop on each TaskCard
             // Correct way to append: Spreads previous items and appends new task
             setTasks(prevItems => [...prevItems, task]);
         } catch (err) {
@@ -62,9 +61,25 @@ function Home() {
         }
     }
 
+    const handleUpdateCompleted = async (task_id, is_completed) => {
+        try {
+            const task = await updateCompleted(task_id, is_completed)
+        } catch (err) {
+            console.log(err)
+            setError("Failed to update the task's completed status...")
+        }
+    }
+
+    const handleDeleteTask = (task_id) => {
+        setTasks(prevTasks => (prevTasks.filter(t => t.id != task_id)))
+    }
 
     const handleSearch = () => {
 
+    }
+
+    const errorHandling = (err) => {
+        setError(`Error occured: ${err}`)
     }
 
     return <div className="home">
@@ -96,13 +111,6 @@ function Home() {
                 value={priorityQuery}
                 onChange={(e) => setPriorityQuery(e.target.value)}
             />
-            <input
-                type="text"
-                placeholder="true / false? Default is false" 
-                className="completed-input"
-                value={completedQuery}
-                onChange={(e) => setCompletedQuery(e.target.value)}
-            />
 
             <button type="submit" className="addtask-button">Add Task</button>
         </form>
@@ -125,9 +133,11 @@ function Home() {
         {loading ? (
             <div className="loading">Loading Tasks...</div>
         ) : (
+            // TaskCard is child component to which handleDeleteTask is sent as a prop.
             <div className="tasks-grid">
             {tasks.map((task) => 
-                (<TaskCard task={task} key={task.id} />))}
+                (<TaskCard task={task} onDelete={handleDeleteTask} onError={errorHandling} 
+                onCompleted={handleUpdateCompleted} key={task.id} />))}
             </div>
         )}
         

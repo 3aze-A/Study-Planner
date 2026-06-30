@@ -23,3 +23,25 @@ export const createTask = async (title, description, duedate, priority, complete
     })
     return response.json()
 }
+
+
+export const deleteTask = async(task_id) => {
+    const response = await fetch(`${BASE_URL}/${task_id}`, {
+        method: "DELETE",
+        headers: {
+        "Content-Type": "application/json"
+        }
+    })
+}
+
+export const updateCompleted = async (task_id, is_completed) => {
+    const response = await fetch(`${BASE_URL}/${task_id}`, {
+        method: "PATCH",
+        headers: {
+        "Content-Type": "application/json"
+        },
+        body : JSON.stringify({
+            completed: is_completed
+        })
+    })
+}
