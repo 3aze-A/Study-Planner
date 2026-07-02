@@ -111,11 +111,18 @@
 /* ── Tasks Grid ──────────────────────── */
 
 .tasks-grid {
-  display: grid;
+  display: column;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: var(--space-5);
 }
 
+
+/* ── Tasks List (cards within a section) ──────────────────────── */
+.tasks-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--space-5);
+}
 
 /* ═══════════════════════════════════════
    MODAL

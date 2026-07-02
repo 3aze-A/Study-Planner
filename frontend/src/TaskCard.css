@@ -32,6 +32,31 @@
 .task-card.low    { border-left-color: var(--priority-low); }
 
 
+/* ── Task Overdue ────────────── */
+.task-card.overdue {
+  border-left: 4px solid #e74c3c;
+  background-color: rgba(231, 76, 60, 0.08);
+}
+
+.task-card.overdue .task-date {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+.task-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.overdue-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #e74c3c;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 /* ── Completed state ─────────────────── */
 
 .task-card.completed {

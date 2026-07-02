@@ -34,7 +34,8 @@ function Home() {
     }
     loadStoredTasks()
   }, []) // empty array = run once, after the first render only
- 
+
+
   const handleAddTask = async (event) => {
     event.preventDefault()
     try {
@@ -53,6 +54,13 @@ function Home() {
   const handleUpdateCompleted = async (task_id, is_completed) => {
     try {
       await updateCompleted(task_id, is_completed)
+
+      // Update React state so the UI instantly updates when setTasks is called
+      setTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === task_id ? { ...task, completed: is_completed } : task
+        )
+      )
     } catch (err) {
       console.log(err)
       setError("Failed to update task.")
@@ -79,7 +87,26 @@ function Home() {
     setDueDateQuery("")
     setPriorityQuery("medium")
   }
- 
+  
+  const getAdjustedDate = (dateString) => {
+    if (dateString) {
+      const dueDateParts = dateString.split('-')
+      const year = Number(dueDateParts[0]);     // Returns the 4-digit year (e.g., 2026)
+      const month = Number(dueDateParts[1]) - 1;   // Returns 0-11 (getMonth() is 0-indexed, Jan is 0)
+      const day = Number(dueDateParts[2]);
+      return new Date(year, month, day)
+    }
+    return Infinity
+    
+  }
+
+  const priorityOrder = {'high': 0, 'medium': 1, 'low': 2}
+  const todoTasks = [...tasks.filter((t) => !t.completed)]
+    .sort((a, b) => {
+      return a.priority !== b.priority ? priorityOrder[a.priority] - priorityOrder[b.priority] 
+      : getAdjustedDate(a.due_date) - getAdjustedDate(b.due_date)
+    })
+  
   return (
     <div className="home">
  
@@ -90,7 +117,7 @@ function Home() {
           + Add Task
         </button>
       </header>
- 
+
       {/* ── Search ── */}
       <div className="search-wrapper">
         <form onSubmit={handleSearch} className="search-form">
@@ -114,7 +141,51 @@ function Home() {
         <div className="loading">Loading tasks...</div>
       ) : (
         <div className="tasks-grid">
-          {tasks.map((task) => (
+
+          {/* ── To-do Section ── */}
+          <div className="tasks-section">
+            <h3 className="non-completed">To-do:</h3>
+            <div className="tasks-list">
+              {todoTasks.map((task) => {
+                // Overdue check
+                let isOverdue = false
+                if (task.due_date) {
+                  isOverdue = (getAdjustedDate(task.due_date) < new Date())
+                }
+
+                return <TaskCard
+                  task={task}
+                  onDelete={handleDeleteTask}
+                  onError={errorHandling}
+                  onCompleted={handleUpdateCompleted}
+                  isOverdue={isOverdue}
+                  key={task.id}
+                />
+                })
+              }
+            </div>
+          </div>
+          <br></br>
+          {/* ── Completed Section ── */}
+          <div className="tasks-section">
+            <h3 className="completed">Completed:</h3>
+            <div className="tasks-list">
+              {tasks.filter((t) => t.completed)
+              .map((task) => (
+                <TaskCard
+                  task={task}
+                  onDelete={handleDeleteTask}
+                  onError={errorHandling}
+                  onCompleted={handleUpdateCompleted}
+                  isOverdue={false}
+                  key={task.id}
+                />
+              ))
+              }
+            </div>
+          </div>
+
+          {/* {tasks.map((task) => (
             // TaskCard is child component to which handleDeleteTask etc. are sent as a prop.
             <TaskCard
               task={task}
@@ -123,7 +194,7 @@ function Home() {
               onCompleted={handleUpdateCompleted}
               key={task.id}
             />
-          ))}
+          ))} */}
         </div>
       )}
  
