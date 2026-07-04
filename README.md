@@ -13,8 +13,9 @@ too, making it convenient when the desktop is not available.
 - Search tasks by title
 - Responsive layout (mobile-friendly)
 - Dark, warm UI with a custom design system
-
-<!-- TODO: trim/adjust this list once Phase 4 sorting + overdue highlighting are confirmed done -->
+- Sort tasks by due date and priority
+- Accumulate completed and non-completed tasks in two separate areas
+- Overdue tasks highlighted in red
 
 ## Tech Stack
 
@@ -69,10 +70,8 @@ Stage 1 (current): core CRUD, frontend-backend integration, and UI polish.
 
 Stage 2 (next):
 <!-- TODO: list planned stage 2 features here, e.g. user authentication, categories/tags, recurring tasks, calendar view, deployment -->
-- Sort tasks by due date and priority
-- Accumulate completed and non-completed tasks in two separate areas
-- Overdue tasks highlighted in red
 - User authentication
+- AI Recommendation system
 
 ## Project Status
 
