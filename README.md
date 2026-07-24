@@ -4,8 +4,7 @@ A full-stack study planning app that lets you create, organize, and track tasks 
 
 <!-- TODO: 2-3 sentences here. Who is this for, what problem does it solve, what makes it useful day-to-day? -->
 The study planner is for students in school or university finding a way to list down their tasks with priorities and completed status 
-all in one accessible place. Since it works and displays properly on any kind of device, the students can view their tasks on mobile 
-too, making it convenient when the desktop is not available.
+all in one accessible place.
 
 ## Features
 
