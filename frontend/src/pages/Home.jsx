@@ -1,7 +1,9 @@
 import TaskCard from "../components/TaskCard"
-import {useState, useEffect} from "react"
-import {getTasks, createTask, updateCompleted} from "../services/api"
+import {useState, useEffect, useContext} from "react"
+import {getTasks, createTask, updateCompleted, updateTask} from "../services/api"
 import "/Users/macblu/Downloads/VS Code Projects/Full-Stack Study Planner/frontend/src/Home.css"
+import {AuthContext} from "../services/AuthContext"
+
 // @ts-check
 
 // @ts-ignore
@@ -13,6 +15,8 @@ function Home() {
   const [loading, setLoading]           = useState(true)
   // Modal is the Add Task form
   const [isModalOpen, setIsModalOpen]   = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editingTaskId, setEditingTaskId] = useState(null)
  
   // Add Task form fields
   const [titleQuery, setTitleQuery]           = useState("")
@@ -39,10 +43,12 @@ function Home() {
   const handleAddTask = async (event) => {
     event.preventDefault()
     try {
+      // POST operation on the backend:
       // returns TaskPublic with an id and 'completed' is false by default
       const task = await createTask(titleQuery, descriptionQuery, duedateQuery, priorityQuery, false)
       // Didnt delete the task's id as .map() uses task.id as the 'key' prop on each TaskCard
       // Correct way to append: Spreads previous items and appends new task
+      // Updating setTasks rerenders the entire Home component
       setTasks(prevItems => [...prevItems, task])
       closeModal()
     } catch (err) {
@@ -63,7 +69,7 @@ function Home() {
       )
     } catch (err) {
       console.log(err)
-      setError("Failed to update task.")
+      setError("Failed to update task completed field.")
     }
   }
  
@@ -71,6 +77,33 @@ function Home() {
     setTasks(prevTasks => prevTasks.filter(t => t.id !== task_id))
   }
  
+
+  // Opens the edit modal
+  const handleOpenEditModal = (task) => {
+    setIsEditModalOpen(true)
+    setEditingTaskId(task.id)
+    setTitleQuery(task.title)
+    setDescriptionQuery(task.description)
+    setDueDateQuery(task.due_date)
+    setPriorityQuery(task.priority)
+  }
+
+
+  // When the edit form is submitted
+  const handleEditTask = async (event) => {
+    event.preventDefault()
+    try {
+      // use the id stored in the state editingTaskId
+      const task = await updateTask(editingTaskId, titleQuery, descriptionQuery, duedateQuery, priorityQuery)
+      setTasks(prevTasks => prevTasks.map(t => t.id === editingTaskId ? task : t))
+      closeModal()
+    } catch (err) {
+      console.log(err)
+      setError("Failed to update task")
+    }
+  }
+
+
   const handleSearch = (event) => {
     event.preventDefault()
   }
@@ -82,6 +115,7 @@ function Home() {
   const closeModal = () => {
     // set fields to blank
     setIsModalOpen(false)
+    setIsEditModalOpen(false)
     setTitleQuery("")
     setDescriptionQuery("")
     setDueDateQuery("")
@@ -100,6 +134,7 @@ function Home() {
     
   }
 
+  // Sort to-do tasks by priority and due-date
   const priorityOrder = {'high': 0, 'medium': 1, 'low': 2}
   const todoTasks = [...tasks.filter((t) => !t.completed)]
     .sort((a, b) => {
@@ -107,15 +142,27 @@ function Home() {
       : getAdjustedDate(a.due_date) - getAdjustedDate(b.due_date)
     })
   
+  // Log out functionality
+  const { logout } = useContext(AuthContext)
+  const handleLogout = () => {
+    logout()
+  }
+
   return (
     <div className="home">
  
       {/* ── Header ── */}
       <header className="home-header">
         <h1 className="app-title">Study Planner</h1>
-        <button className="btn-add-task" onClick={() => setIsModalOpen(true)}>
-          + Add Task
-        </button>
+        <div className="home-header-subtitle">Organize your tasks and stay on top of your studies!</div>
+        <div className="home-header-right">
+          <button className="btn-add-task" onClick={() => setIsModalOpen(true)}>
+            + Add Task
+          </button>
+          <button className="btn-logout" onClick={handleLogout}>
+            Log out
+          </button>
+        </div>
       </header>
 
       {/* ── Search ── */}
@@ -146,7 +193,9 @@ function Home() {
           <div className="tasks-section">
             <h3 className="non-completed">To-do:</h3>
             <div className="tasks-list">
-              {todoTasks.map((task) => {
+              {/* Filter tasks based on search query and map to TaskCard components */}
+              {todoTasks.filter((t) => t.title.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map((task) => {
                 // Overdue check
                 let isOverdue = false
                 if (task.due_date) {
@@ -159,6 +208,7 @@ function Home() {
                   onError={errorHandling}
                   onCompleted={handleUpdateCompleted}
                   isOverdue={isOverdue}
+                  onEdit={handleOpenEditModal}
                   key={task.id}
                 />
                 })
@@ -170,7 +220,9 @@ function Home() {
           <div className="tasks-section">
             <h3 className="completed">Completed:</h3>
             <div className="tasks-list">
-              {tasks.filter((t) => t.completed)
+              {/* Filter tasks based on search query and map to TaskCard components */}
+              {tasks.filter((t) => t.title.toLowerCase().includes(searchQuery.toLowerCase()))
+              .filter((t) => t.completed)
               .map((task) => (
                 <TaskCard
                   task={task}
@@ -178,6 +230,7 @@ function Home() {
                   onError={errorHandling}
                   onCompleted={handleUpdateCompleted}
                   isOverdue={false}
+                  onEdit={handleOpenEditModal}
                   key={task.id}
                 />
               ))
@@ -185,16 +238,6 @@ function Home() {
             </div>
           </div>
 
-          {/* {tasks.map((task) => (
-            // TaskCard is child component to which handleDeleteTask etc. are sent as a prop.
-            <TaskCard
-              task={task}
-              onDelete={handleDeleteTask}
-              onError={errorHandling}
-              onCompleted={handleUpdateCompleted}
-              key={task.id}
-            />
-          ))} */}
         </div>
       )}
  
@@ -263,7 +306,77 @@ function Home() {
           </div>
         </div>
       )}
+
+
+      {/* ── Edit Task Modal ── */}
+      {isEditModalOpen && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
  
+            <div className="modal-header">
+              <h2>Edit Task</h2>
+              <button className="modal-close" onClick={closeModal}>✕</button>
+            </div>
+ 
+            <form onSubmit={handleEditTask} className="modal-form">
+ 
+              <div className="form-group">
+                <label htmlFor="task-title">Title</label>
+                <input
+                  id="task-title"
+                  type="text"
+                  placeholder={titleQuery}
+                  value={titleQuery}
+                  // Updates the state from an input element
+                  onChange={(e) => setTitleQuery(e.target.value)}
+                  required
+                />
+              </div>
+ 
+              <div className="form-group">
+                <label htmlFor="task-description">Description</label>
+                <input
+                  id="task-description"
+                  type="text"
+                  placeholder={descriptionQuery}
+                  value={descriptionQuery}
+                  onChange={(e) => setDescriptionQuery(e.target.value)}
+                />
+              </div>
+ 
+              <div className="form-group">
+                <label htmlFor="task-duedate">Due Date</label>
+                <input
+                  id="task-duedate"
+                  type="date"
+                  placeholder={duedateQuery}
+                  value={duedateQuery}
+                  onChange={(e) => setDueDateQuery(e.target.value)}
+                />
+              </div>
+ 
+              <div className="form-group">
+                <label htmlFor="task-priority">Priority</label>
+                <select
+                  id="task-priority"
+                  placeholder={priorityQuery}
+                  value={priorityQuery}
+                  onChange={(e) => setPriorityQuery(e.target.value)}
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+ 
+              <button type="submit" className="btn-submit">Edit Task</button>
+ 
+            </form>
+          </div>
+        </div>
+      )}
+
+
     </div>
   )
 }

@@ -7,7 +7,7 @@ import "/Users/macblu/Downloads/VS Code Projects/Full-Stack Study Planner/fronte
 
 // @ts-ignore
 
-function TaskCard({ task, onDelete, onError, onCompleted, isOverdue }) { // task is an object/dict
+function TaskCard({ task, onDelete, onError, onCompleted, isOverdue, onEdit }) { // task is an object/dict
 
   const handleCheckboxChange = (event) => {
     const newValue = event.target.checked
@@ -60,7 +60,7 @@ function TaskCard({ task, onDelete, onError, onCompleted, isOverdue }) { // task
           {isOverdue && <span className="overdue-badge">Overdue</span>}
           <button className="delete-btn" onClick={() => handleDeleteTask(task.id)}>
           ✕
-        </button>
+          </button>
         </div>
       </div>
  
@@ -81,6 +81,9 @@ function TaskCard({ task, onDelete, onError, onCompleted, isOverdue }) { // task
           />
           <span>{task.completed ? "Completed" : "Mark complete"}</span>
         </label>
+        <div className="task-card-footer-right">
+          <button className="edit-btn" onClick={() => {onEdit(task)}}>Edit</button>
+        </div>
       </div>
  
     </div>

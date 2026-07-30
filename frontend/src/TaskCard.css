@@ -43,6 +43,15 @@
   font-weight: 600;
 }
 
+.overdue-badge {
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+
 .task-card-header-right {
   display: flex;
   align-items: center;
@@ -56,6 +65,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
 
 /* ── Completed state ─────────────────── */
 
@@ -171,9 +181,31 @@
 /* ── Card Footer ─────────────────────── */
 
 .task-card-footer {
-  border-top: 1px solid var(--border);
-  padding-top: var(--space-3);
-  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-card-footer-right {
+  display: flex;
+  align-items: center;
+}
+
+.edit-btn {
+  background: transparent;
+  border: 1px solid var(--color-amber);
+  color: var(--color-amber);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.edit-btn:hover {
+  background: var(--color-amber);
+  color: var(--amber)
 }
 
 .completed-label {

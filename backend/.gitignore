@@ -9,6 +9,9 @@ __pycache__/
 # Remove the VE
 venv/
 
+# Remove the .env
+.env
+
 # Distribution / packaging
 .Python
 build/
