@@ -21,7 +21,15 @@ export const getTasks = async () => {
     // if there is no token, ...getAuthHead() spreads an empty {} into nothing, and so
     // the request goes out without an Authorization header and hits the backend's 401 error.
 
-    return response.json()
+    if (response.status === 401) {
+        throw new Error("Unauthorized. Please log in.")
+    }
+
+    if (!response.ok) {
+        throw new Error(`HTTP_ERROR_${response.status}`)
+    }
+
+    return await response.json()
 }
 
 export const createTask = async (title, description, duedate, priority, completed) => {
@@ -41,7 +49,12 @@ export const createTask = async (title, description, duedate, priority, complete
                 completed: Boolean(completed)
             })
         })
-        return response.json()
+
+        if (response.status === 401) {
+            throw new Error("Unauthorized. Please log in.")
+        }
+
+        return await response.json()
     } catch (err) {
         console.log(`Error occured in creating new task: ${err}`)
     }
@@ -56,6 +69,12 @@ export const deleteTask = async(task_id) => {
         ...getAuthHead()
         }
     })
+
+    if (response.status === 401) {
+        throw new Error("Unauthorized. Please log in.")
+    }
+
+    return await response.json()
 }
 
 export const updateCompleted = async (task_id, is_completed) => {
@@ -69,6 +88,9 @@ export const updateCompleted = async (task_id, is_completed) => {
             completed: is_completed
         })
     })
+    if (response.status === 401) {
+        throw new Error("Unauthorized. Please log in.")
+    }
 }
 
 
@@ -89,7 +111,12 @@ export const updateTask = async (task_id, title, description, duedate, priority,
                 completed: Boolean(completed)
             })
         })
-        return response.json()
+
+        if (response.status === 401) {
+            throw new Error("Unauthorized. Please log in.")
+        }
+
+        return await response.json()
     } catch (err) {
         console.log(`Error occured in updating the task: ${err}`)
     }
@@ -130,7 +157,7 @@ export const registerUser = async (email, password) => {
             })
     })
     if (!response.ok) {
-        // even if response.ok, the response still has a body which is whatever the HTTPExtension is shaped
+        // even if !response.ok, the response still has a body which is whatever the HTTPExtension is shaped
         // like in backend: 'HTTPException(status_code=409, detail="Email is already used. Please log-in.'
         // so the json is: { "detail": "Email is already used. Please log-in." }
         const errorData = await response.json()

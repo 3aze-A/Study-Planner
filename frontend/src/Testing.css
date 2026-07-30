@@ -1,0 +1,161 @@
+/* ═══════════════════════════════════════
+   AUTH PAGE
+═══════════════════════════════════════ */
+
+.auth-page {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+}
+
+.auth-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  color: var(--text-h);
+  margin-bottom: var(--space-6);
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.login-form {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.auth-toggle {
+  margin-top: var(--space-5);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  transition: color var(--transition);
+}
+
+.auth-toggle:hover {
+  color: var(--amber);
+}
+
+/* .btn-submit:active {
+  transform: scale(0.97);
+} */
+
+
+
+
+
+/* Testing Button Animations */
+
+
+/* Shared Base Button Layout for Form */
+.btn-submit {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  width: 100%;
+  height: 55px;                  /* Consistent height for both states */
+  border-radius: 10px;
+  border: none;
+  background-color: #f5a638;    /* orange accent color */
+  color: #000;
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 16px;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-sizing: border-box;
+  z-index: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ==========================================
+   SCENARIO 1: LOGIN (Button 2 Animation)
+   ========================================== */
+.btn-submit.btn-2-style {
+  transition: color 0.5s;
+}
+
+.btn-submit.btn-2-style:hover {
+  color: #000;
+}
+
+/* The sliding angled slice background */
+.btn-submit.btn-2-style::after {
+  content: "";
+  background: #ffffff;
+  position: absolute;
+  z-index: -1;
+  left: -20%;
+  right: -20%;
+  top: 0;
+  bottom: 0;
+  transform: skewX(-45deg) scale(0, 1);
+  transition: transform 0.5s;
+}
+
+.btn-submit.btn-2-style:hover::after {
+  transform: skewX(-45deg) scale(1, 1);
+}
+
+/* ==========================================
+   SCENARIO 2: REGISTER (Button 1 Animation)
+   ========================================== */
+/* Original text overlay that drops down */
+.btn-submit.btn-1-style .original {
+  background: #fff;
+  color: #000;
+  display: grid;
+  inset: 0;
+  place-content: center;
+  position: absolute;
+  transition: transform 0.3s cubic-bezier(0.87, 0, 0.13, 1);
+}
+
+.btn-submit.btn-1-style:hover .original {
+  transform: translateY(100%);
+}
+
+/* Letters container */
+.btn-submit.btn-1-style .letters {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+}
+
+/* Animated letter fall-in */
+.btn-submit.btn-1-style span {
+  opacity: 0;
+  transform: translateY(-15px);
+  transition: transform 0.3s cubic-bezier(0.87, 0, 0.13, 1), opacity 0.3s;
+}
+
+.btn-submit.btn-1-style span:nth-child(2n) {
+  transform: translateY(15px);
+}
+
+.btn-submit.btn-1-style:hover span {
+  opacity: 1;
+  transform: translateY(0);
+}

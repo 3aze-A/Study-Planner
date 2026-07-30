@@ -20,11 +20,15 @@ function TaskCard({ task, onDelete, onError, onCompleted, isOverdue, onEdit }) {
     try {
       // delete the task from the backend database
       await deleteTask(task_id)
-      // delete the task form the frontend interface
+      // delete the task from the frontend interface
       onDelete(task_id)
     } catch (err) {
-      console.log(err)
-      onError(err)
+      if (err.message === "Unauthorized. Please log in.") {
+        logout() // Call the logout function from AuthContext to clear the token and redirect to login
+        onError("Unauthorized. Please log in.")
+      } else {
+        onError(`Failed to delete task: ${err.message}`)
+      }
     }
   }
 

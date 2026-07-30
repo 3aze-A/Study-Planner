@@ -47,7 +47,6 @@
 
 .btn-add-task:hover {
   opacity: 0.85;
-  transform: translateY(-1px);
 }
 
 .btn-add-task:active {
@@ -164,7 +163,10 @@
   padding: var(--space-5);
 }
 
-.modal {
+
+
+
+/* .modal {
   background: var(--bg-modal);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -183,7 +185,7 @@
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-}
+} */
 
 .modal-header {
   display: flex;
@@ -298,7 +300,6 @@
 
 .btn-submit:hover {
   opacity: 0.85;
-  transform: translateY(-1px);
 }
 
 .btn-submit:active {
