@@ -4,17 +4,15 @@ A full-stack study planning app that lets you create, organize, and track tasks 
 
 <!-- TODO: 2-3 sentences here. Who is this for, what problem does it solve, what makes it useful day-to-day? -->
 The study planner is for students in school or university finding a way to list down their tasks with priorities and completed status 
-all in one accessible place.
+all in one accessible place. Each user has its own private workspace to display their own task list.
 
 ## Features
+- **User Authentication & Personalization:** Secure individual accounts ensuring each student accesses and manages their own private workspace.
+- **Task Categorization & Prioritization:** Ability to assign priority levels, due dates, tags, and subject categories to keep coursework organized.
+- **Status Tracking:** Real-time progress updates that allow users to mark tasks as pending, or finished. Overdue tasks highlighted in red
+- **Interactive Dashboard:** A centralized, clean overview displaying upcoming deadlines, high-priority tasks, and overall completion statistics.
+- **Search & Filter Functionality:** Quick searching options to view tasks based on their title.
 
-- Create, edit, delete, and mark tasks as complete
-- Search tasks by title
-- Responsive layout (mobile-friendly)
-- Dark, warm UI with a custom design system
-- Sort tasks by due date and priority
-- Accumulate completed and non-completed tasks in two separate areas
-- Overdue tasks highlighted in red
 
 ## Tech Stack
 
@@ -57,6 +55,13 @@ The app will be running at `http://localhost:5173`.
 
 ## Screenshots
 
+### User Authentication Forms
+#### Log-in
+![alt text](screenshots/login_form.png)
+
+#### Register
+![alt text](screenshots/signup_form.png)
+
 ### Home Page
 ![alt text](screenshots/home_page.png)
 
@@ -65,13 +70,15 @@ The app will be running at `http://localhost:5173`.
 
 ## Roadmap
 
-Stage 1 (current): core CRUD, frontend-backend integration, and UI polish.
+Stage 1: core CRUD, frontend-backend integration, and UI polish.
+
+Stage 2 (completed):
+- User authentication
 
 Stage 2 (next):
-<!-- TODO: list planned stage 2 features here, e.g. user authentication, categories/tags, recurring tasks, calendar view, deployment -->
-- User authentication
+<!-- TODO: list planned stage 2 features here, e.g. categories/tags/filter, recurring tasks, calendar view, deployment -->
 - AI Recommendation system
 
 ## Project Status
 
-Stage 1 complete. Actively developing stage 2 features.
+Stage 1 and part 1 of stage 2 complete. Actively developing stage 2's next features.
