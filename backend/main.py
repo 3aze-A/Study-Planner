@@ -1,8 +1,10 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
 from enum import Enum
-from fastapi import FastAPI, HTTPException, Depends, status
+import json
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationInfo, field_validator
 from sqlmodel import SQLModel, Field, create_engine, select, Session, Column, Enum as SQLEnum
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime, UTC, timedelta
@@ -12,6 +14,7 @@ from jose.exceptions import JWTError
 from typing import Annotated
 import os
 import bcrypt
+import pdfplumber
 
 
 # source venv/bin/activate
@@ -32,6 +35,7 @@ Notes:
 """
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 
 # User Model
@@ -118,13 +122,24 @@ class TaskPriority(str, Enum):
 # ---------
 
 class TaskBase(SQLModel):
-    title: str = Field(index=True)
+    course: str = Field(index=True)
     description: str | None = Field(default=None)
     due_date: str | None = Field(default=None, index=True)
     priority: TaskPriority = Field(
         sa_column=Column(SQLEnum(TaskPriority), nullable=False, default=TaskPriority.MEDIUM)
         )
+    estimated_time: int = Field(default=30)
     completed: bool = Field(default=False)
+
+    @field_validator("due_date")
+    @classmethod
+    def validate_due_date(cls, value: str, info: ValidationInfo) -> str:
+        if value is not None:
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+            except ValueError:
+                raise ValueError("due_date must be in YYYY-MM-DD format")
+        return value
 
 # since table=True, this class will be used to create a table in the database., and id is optional because when we create a new task (using CreateTask), 
 # we don't have an ID for it yet, and we want the database to generate the ID automatically for us.
@@ -145,10 +160,11 @@ class TaskPublic(TaskBase):
 
 # This is almost the same as TaskBase, but all the fields are optional, so we can't simply inherit from TaskBase.
 class TaskUpdate(SQLModel):
-    title: str | None = None
+    course: str | None = None
     description: str | None = None
     due_date: str | None = None
     priority: str | None = None
+    estimated_time: int | None = None
     completed: bool | None = None
 
 
@@ -207,7 +223,7 @@ def create_task(task: TaskCreate, user_id: int = Depends(get_current_user_id)):
     
 
 @app.get("/tasks", response_model=list[TaskPublic])
-def read_tasks(user_id: int = Depends(get_current_user_id)):
+def read_tasks(user_id: int = Depends(get_current_user_id)):  # Depends(get_current_user_id) will extract the user_id from the JWT token sent by the client in the Authorization header.
     with Session(engine) as session:
         tasks = session.exec(select(Task).where(Task.user_id == user_id)).all()
         return tasks
@@ -291,4 +307,221 @@ def login_attempt(user: UserCreate):
         else:
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
+
+
+##########################################
+# File Upload Process
+##########################################
+import instructor
+from pydantic import BaseModel, Field
+from anthropic import Anthropic
+
+class SyllabusImportResult(BaseModel):
+        created: list[TaskPublic] = Field(default_factory=list)
+        skipped: list[str] = Field(default_factory=list)
+
+
+course: str | None = None
+description: str | None = None
+due_date: str | None = None
+priority: str | None = None
+estimated_time: int | None = None
+completed: bool | None = None
+
+
+CLAUDE_PROMPT = """
+You are a precise syllabus parsing engine designed to extract academic timeline data. 
+Your task is to analyze the provided course syllabus and convert every assignment, exam, 
+and milestone into a highly accurate data structure.
+
+Return only an array of JSON objects. Do not include any preamble, markdown code blocks, 
+or conversational notes. Each object must strictly use the following schema: 
+{'course': string, 'description': string, 'due_date': string | null, 'priority': 'low' | 'medium' | 
+'high', 'estimated_time': integer}
+
+Note:
+- The worked example below is abbreviated for illustration. Your output must be complete JSON with 
+no literal ellipsis or truncation.
+- The 'estimated_time' field must be an integer representing the estimated time in minutes to complete the task, and must be a multiple of 30, with a maximum of 240.
+- The 'description' field must be a string describing the assignment or event.
+- The 'course' field must be a string representing the course code (e.g., "MAT135").
+- The 'due_date' field must be in the format YYYY-MM-DD.
+
+Extraction Rules:
+Only create a card for discrete, dated, actionable items.
+Any item in the input object with an ongoing 'Due Date', written explicitly or implicitly e.g 
+'On-going', must not be included in the output JSON. If there is any other type of 'Due Date' 
+of an item, then that item must be included in the output, example 'Final Exam Period' as a 
+due-date must have a null value of 'due_date' in the output.
+
+If an item has multiple due dates, example 'Quizzes' then split the 'Due Date' cell into N 
+separate items, one per date, not just per row, and index each item accordingly (Quiz 1, 
+Quiz 2 etc.).
+
+Priority thresholds (per item %, after dividing category totals by item count): <1% -> "low", 
+1-5% -> "medium", >5% -> "high".
+
+Items with no stated weight but a clear individual due date (e.g Surveys) still get a card.
+
+Determine the estimated_time of each item by yourself according to the assessment type or details; 
+be realistic and dont overestimate or underestimate. If unable to predict a proper value, then 
+default to 60. For example, a 'Survey' must take a minimum of 30 minutes, so estimated_time is 30.
+However, estimated_time must be an integer with 30 minute intervales, example 30, or 60, or 90, and 
+must not exceed 240.
+
+
+
+Worked Example:
+<example_input>
+[['Assessment', 'Percent', 'Details', 'Due Date'], ['Preparation checks', '5%', 'Average of all 
+except your lowest\nthree.', '2025-09-08,\n2025-09-15,\n2025-09-22,\n2025-09-29,\n2025-10-06,
+\n2025-10-13,\n2025-10-20,\n2025-11-03,\n2025-11-10,\n2025-11-17,\n2025-11-24'], 
+['MathMatize polls', '4%', 'Full marks for participating in at least\n80% of polls.', 'Ongoing'], 
+['Online assignments', '7%', 'Average of all except your lowest\none. Online assignments will be\n
+completed on WebWorK.', '2025-09-14,\n2025-09-21,\n2025-09-28,\n2025-10-12,\n2025-10-19,\n2025-10-26,
+\n2025-11-09,\n2025-11-23,\n2025-11-30'], ['Writing\nAssignments', '4%', 'There will be three "writing
+\nassignments" in the course. All three\nwill count towards your final grade.\nMore details will be 
+available on\nQuercus later.', '2025-10-12,\n2025-11-09,\n2025-11-30'], ['Term Test 1', '19%', 
+'If you write two term tests, your\nhighest test score will be worth 22%,\nand your lowest test score 
+will be\nworth 16% (for an average of 19%).\nTests are written 5:10-7pm on\nFridays.', '2025-10-03'], 
+['Term Test 2', '19%', 'If you write two term tests, your\nhighest test score will be worth 22%,\nand 
+your lowest test score will be\nworth 16% (for an average of 19%).\nTests are written 5:10-7pm on\n
+Fridays.', '2025-11-14'], ['Surveys', '2%', 'There will be a start-of-course survey\nand an end-of-course 
+survey. You\nmust complete the surveys by the\ndue date to get the associated grade.', '2025-09-15,
+\n2025-12-01'], ['Final Assessment', '40%', 'Cumulative Final Exam. You must\nobtain a minimum grade of 
+35% on\nthe final exam in order to pass the\ncourse.', 'Final Exam Period']]
+</example_input>
+
+<example_output>
+[
+{"course": "MAT135", "description": "Online Assignment 1", "due_date": "2025-09-14", "priority": "low", "estimated_time": 60},
+{"course": "MAT135", "description": "Online Assignment 2", "due_date": "2025-09-21", "priority": "low", "estimated_time": 60},
+{"course": "MAT135", "description": "Online Assignment 3", "due_date": "2025-09-28", "priority": "low", "estimated_time": 60},
+{"course": "MAT135", "description": "Final Assessment", "due_date": null, "priority": "high", "estimated_time": 120}
+]
+</example_output>
+"""
+
+
+def extract_tables_from_pdf(file: io.BytesIO) -> list[list[str]]:
+    # file_path = "MAT135 f25 - Syllabus.pdf"
+
+    raw_rows = []
+    target_found = False
+
+    with pdfplumber.open(file) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text() or ""
+
+            if "Marking Scheme" in text:
+                target_found = True
+
+            if target_found:
+                tables = page.extract_tables()
+                for table in tables:
+                    for row in table:
+                        # Filter out duplicate table headers caused by page breaks
+                        if row == ['Assessment', 'Percent', 'Details', 'Due Date']:
+                            if len(raw_rows) > 0:
+                                continue  # Skip repeated header on page 6
+                        raw_rows.append(row)
+
+                if "Overall Course Grading Policy" in text and len(raw_rows) > 0:
+                    break
+
+    # --- POST-PROCESSING: Merge broken rows across page boundaries ---
+    cleaned_rows = []
+
+    for row in raw_rows:
+        # Check if this is an orphaned/continuation row (e.g., empty main fields)
+        is_continuation = (
+            cleaned_rows
+            and ( not row[0].strip()  # Primary label ('Assessment') is empty
+            or not row[1].strip()  # Secondary label ('Percent') is empty
+            or not row[2].strip() ) # Third label ('Due Date') is empty
+        )
+
+        if is_continuation:
+            # Merge cell contents into the previous row's corresponding columns
+            previous_row = cleaned_rows[-1]
+            for idx in range(len(row)):
+                if row[idx].strip():
+                    if previous_row[idx].strip():
+                        previous_row[idx] += "\n" + row[idx].strip()
+                    else:
+                        previous_row[idx] = row[idx].strip()
+        else:
+            cleaned_rows.append(row)
+
+    return cleaned_rows
+
+import io
+
+@app.post("/uploadfile/")
+async def create_upload_file(file: UploadFile, user_id: int = Depends(get_current_user_id)):
+    ##########################################
+    # API Integration
+    ##########################################
+    binary_stream = io.BytesIO(await file.read())
+
+    # clean_file = extract_tables_from_pdf(file_contents)
+    items_list = extract_tables_from_pdf(binary_stream)
+
+    client = Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    message = client.messages.create(
+        model = "claude-haiku-4-5-20251001",
+        max_tokens=2048,
+        system=CLAUDE_PROMPT,
+        messages = [{
+            "role": "user",
+            "content": (f"Analyze the text wrapped inside the XML tags below and execute the extraction rules: <syllabus_text> {json.dumps(items_list)} </syllabus_text>")
+        }]
+    )
+
+    print(message.model_dump_json(indent=2))
+    print(f"Message Content: {message.content}")
+
+    # file is a pdf file
+    return {'filename': file.filename, 'content_type': file.content_type, 'user_id': user_id}
+
+
+
+"""
+Recent Output:
+
+
+{
+  "id": "msg_011CdvyX8PjYVZi7jJk5GPeh",
+  "container": null,
+  "content": [
+    {
+      "citations": null,
+      "text": "```json\n[\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 1\", \"due_date\": \"2025-09-08\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 2\", \"due_date\": \"2025-09-15\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 3\", \"due_date\": \"2025-09-22\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 4\", \"due_date\": \"2025-09-29\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 5\", \"due_date\": \"2025-10-06\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 6\", \"due_date\": \"2025-10-13\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 7\", \"due_date\": \"2025-10-20\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 8\", \"due_date\": \"2025-11-03\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 9\", \"due_date\": \"2025-11-10\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 10\", \"due_date\": \"2025-11-17\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Preparation Check 11\", \"due_date\": \"2025-11-24\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Online Assignment 1\", \"due_date\": \"2025-09-14\", \"priority\": \"medium\", \"estimated_time\": 60},\n  {\"course\": \"MAT135\", \"description\": \"Online Assignment 2\", \"due_date\": \"2025-09-21\", \"priority\": \"medium\", \"estimated_time\": 60},\n  {\"course\": \"MAT135\", \"description\": \"Online Assignment 3\", \"due_date\": \"2025-09-28\", \"priority\": \"medium\", \"estimated_time\": 60},\n  {\"course\": \"MAT135\", \"description\": \"Online Assignment 4\", \"due_date\": \"2025-10-12\", \"priority\": \"medium\", \"estimated_time\": 60},\n  {\"course\": \"MAT135\", \"description\": \"Online Assignment 5\", \"due_date\": \"2025-10-19\", \"priority\": \"medium\", \"estimated_time\": 60},\n  {\"course\": \"MAT135\", \"description\": \"Online Assignment 6\", \"due_date\": \"2025-10-26\", \"priority\": \"medium\", \"estimated_time\": 60},\n  {\"course\": \"MAT135\", \"description\": \"Online Assignment 7\", \"due_date\": \"2025-11-09\", \"priority\": \"medium\", \"estimated_time\": 60},\n  {\"course\": \"MAT135\", \"description\": \"Online Assignment 8\", \"due_date\": \"2025-11-23\", \"priority\": \"medium\", \"estimated_time\": 60},\n  {\"course\": \"MAT135\", \"description\": \"Online Assignment 9\", \"due_date\": \"2025-11-30\", \"priority\": \"medium\", \"estimated_time\": 60},\n  {\"course\": \"MAT135\", \"description\": \"Writing Assignment 1\", \"due_date\": \"2025-10-12\", \"priority\": \"medium\", \"estimated_time\": 90},\n  {\"course\": \"MAT135\", \"description\": \"Writing Assignment 2\", \"due_date\": \"2025-11-09\", \"priority\": \"medium\", \"estimated_time\": 90},\n  {\"course\": \"MAT135\", \"description\": \"Writing Assignment 3\", \"due_date\": \"2025-11-30\", \"priority\": \"medium\", \"estimated_time\": 90},\n  {\"course\": \"MAT135\", \"description\": \"Term Test 1\", \"due_date\": \"2025-10-03\", \"priority\": \"high\", \"estimated_time\": 120},\n  {\"course\": \"MAT135\", \"description\": \"Term Test 2\", \"due_date\": \"2025-11-14\", \"priority\": \"high\", \"estimated_time\": 120},\n  {\"course\": \"MAT135\", \"description\": \"Survey 1\", \"due_date\": \"2025-09-15\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Survey 2\", \"due_date\": \"2025-12-01\", \"priority\": \"low\", \"estimated_time\": 30},\n  {\"course\": \"MAT135\", \"description\": \"Final Assessment\", \"due_date\": null, \"priority\": \"high\", \"estimated_time\": 180}\n]\n```",
+      "type": "text"
+    }
+  ],
+  "model": "claude-haiku-4-5-20251001",
+  "role": "assistant",
+  "stop_details": null,
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 0,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "inference_geo": "not_available",
+    "input_tokens": 2137,
+    "output_tokens": 1300,
+    "output_tokens_details": null,
+    "server_tool_use": null,
+    "service_tier": "standard"
+  }
+}
+Message Content: [TextBlock(citations=None, text='```json\n[\n  {"course": "MAT135", "description": "Preparation Check 1", "due_date": "2025-09-08", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 2", "due_date": "2025-09-15", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 3", "due_date": "2025-09-22", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 4", "due_date": "2025-09-29", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 5", "due_date": "2025-10-06", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 6", "due_date": "2025-10-13", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 7", "due_date": "2025-10-20", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 8", "due_date": "2025-11-03", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 9", "due_date": "2025-11-10", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 10", "due_date": "2025-11-17", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Preparation Check 11", "due_date": "2025-11-24", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Online Assignment 1", "due_date": "2025-09-14", "priority": "medium", "estimated_time": 60},\n  {"course": "MAT135", "description": "Online Assignment 2", "due_date": "2025-09-21", "priority": "medium", "estimated_time": 60},\n  {"course": "MAT135", "description": "Online Assignment 3", "due_date": "2025-09-28", "priority": "medium", "estimated_time": 60},\n  {"course": "MAT135", "description": "Online Assignment 4", "due_date": "2025-10-12", "priority": "medium", "estimated_time": 60},\n  {"course": "MAT135", "description": "Online Assignment 5", "due_date": "2025-10-19", "priority": "medium", "estimated_time": 60},\n  {"course": "MAT135", "description": "Online Assignment 6", "due_date": "2025-10-26", "priority": "medium", "estimated_time": 60},\n  {"course": "MAT135", "description": "Online Assignment 7", "due_date": "2025-11-09", "priority": "medium", "estimated_time": 60},\n  {"course": "MAT135", "description": "Online Assignment 8", "due_date": "2025-11-23", "priority": "medium", "estimated_time": 60},\n  {"course": "MAT135", "description": "Online Assignment 9", "due_date": "2025-11-30", "priority": "medium", "estimated_time": 60},\n  {"course": "MAT135", "description": "Writing Assignment 1", "due_date": "2025-10-12", "priority": "medium", "estimated_time": 90},\n  {"course": "MAT135", "description": "Writing Assignment 2", "due_date": "2025-11-09", "priority": "medium", "estimated_time": 90},\n  {"course": "MAT135", "description": "Writing Assignment 3", "due_date": "2025-11-30", "priority": "medium", "estimated_time": 90},\n  {"course": "MAT135", "description": "Term Test 1", "due_date": "2025-10-03", "priority": "high", "estimated_time": 120},\n  {"course": "MAT135", "description": "Term Test 2", "due_date": "2025-11-14", "priority": "high", "estimated_time": 120},\n  {"course": "MAT135", "description": "Survey 1", "due_date": "2025-09-15", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Survey 2", "due_date": "2025-12-01", "priority": "low", "estimated_time": 30},\n  {"course": "MAT135", "description": "Final Assessment", "due_date": null, "priority": "high", "estimated_time": 180}\n]\n```', type='text')]
+"""
 
