@@ -12,6 +12,7 @@ all in one accessible place. Each user has its own private workspace to display 
 - **Status Tracking:** Real-time progress updates that allow users to mark tasks as pending, or finished. Overdue tasks highlighted in red
 - **Interactive Dashboard:** A centralized, clean overview displaying upcoming deadlines, high-priority tasks, and overall completion statistics.
 - **Search & Filter Functionality:** Quick searching options to view tasks based on their title.
+- **Import Syllabus:** Import a syllabus to extract all assignments and create all task cards automatically.
 
 
 ## Tech Stack
@@ -67,6 +68,33 @@ The app will be running at `http://localhost:5173`.
 
 ### Add Task Form
 ![alt text](screenshots/add_task_form.png)
+
+### Import Syllabus Summary
+![alt text](screenshots/import_result_summary.png)
+
+## Design Decisions & Technical Tradeoffs
+
+### Syllabus Import Feature:
+#### Priority computed in Python, not by the LLM
+Initially asked Claude to classify each item's priority directly. Testing against the real MAT135 grading breakdown showed Claude getting the arithmetic wrong on two categories (dividing category weight by item count) which is a predictable failure mode, since precise arithmetic embedded in natural-language instructions is not a strength of LLMs. Redesigned so Claude only reports each category's stated percentage (a transcription task it handles reliably), while Python performs the division and threshold comparison deterministically. This also made the logic unit-testable and debuggable in a way "trust the model's math" never could be.
+
+#### Dropped table-specific PDF parsing (pdfplumber.extract_tables()) in favor of full-document text extraction using LLM
+The original implementation searched for a "Marking Scheme" header and extracted only detected table structures. Testing against syllabi from other courses and universities revealed this approach doesn't generalize: different institutions use different section headers ("Grading Breakdown," "Assessment, Evaluation, and Grading"), and some syllabi present grading information as prose rather than tables at all. Replaced with unconditional full-text extraction, delegating the "find the relevant section regardless of formatting" problem to the LLM — a better fit for its strengths than brittle string-matching and layout detection.
+
+#### Partial-success validation instead of all-or-nothing
+Each extracted item is validated independently against the TaskCreate schema; a single malformed item (bad date format, unresolvable category) is skipped with a recorded reason rather than discarding the entire import batch. Reflects a deliberate choice to trust LLM output only as far as its worst-performing item, not its average.
+
+## Known Limitations
+
+### Syllabus Import Feature:
+#### No duplicate-import detection
+Uploading the same syllabus twice creates two full sets of duplicate task cards. There's currently no check against existing tasks (by course + description + due date, or similar) before inserting. Acceptable for now since imports are infrequent and user-initiated.
+
+#### No handling for scanned (non-text) PDFs
+PDF text extraction assumes a genuine text layer exists. A scanned/photographed PDF with no selectable text would extract as empty or near-empty content, and the pipeline has no fallback (e.g. treating it as an image, or applying OCR) for that case. None of the syllabi tested so far were scanned documents, so this hasn't been hit in practice.
+
+#### No pre-commit confirmation step
+Extracted tasks are validated and inserted into the database in a single step; the post-import summary modal is informational only, shown after tasks already exist. There's no way to review and reject specific items before they're created. A rejected/unwanted card must be deleted manually afterward like any other task.
 
 ## Roadmap
 

@@ -13,9 +13,16 @@ from dotenv import load_dotenv
 from jose import jwt
 from jose.exceptions import JWTError
 from typing import Annotated
+from docx import Document
+from docx.document import Document as DocumentClass
+from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
+from docx.table import Table
 import os
 import bcrypt
 import pdfplumber
+import io
+import base64
 
 
 # source venv/bin/activate
@@ -335,31 +342,52 @@ You are a precise syllabus parsing engine designed to extract academic timeline 
 Your task is to analyze the provided course syllabus and convert every assignment, exam, 
 and milestone into a highly accurate data structure.
 
-Return only an array of JSON objects. Do not include any preamble, markdown code blocks, 
-or conversational notes. Each object must strictly use the following schema: 
+Return only an object of two keys, each mapping to a list of objects. Do not include any preamble, markdown code blocks, 
+or conversational notes. 
+
+Each object in the "categories" list must strictly use the following schema: 
+{'name': string, 'percent': float | null}
+
+Each object in the "items" list must strictly use the following schema: 
 {'course': string, 'description': string, 'due_date': string | null, 'estimated_time': integer, 'category': string}
 
+Only include a category in the "categories" list if it produced at least one item in the 
+"items" list. Categories that were excluded entirely (e.g. ongoing participation with no 
+discrete due date) must not appear in "categories" either.
+
 Note:
-- The worked example below is abbreviated for illustration. Your output must be complete JSON with 
-no literal ellipsis or truncation.
-- The 'estimated_time' field must be an integer representing the estimated time in minutes to complete the task, and must be a multiple of 30, with a maximum of 240.
+- The worked example below shows the complete expected output for the given input, not an 
+abbreviated one. Never include a literal ellipsis ("...") in your actual output — always 
+produce the complete, real JSON for the document you were given.
+- The 'estimated_time' field must be an integer representing the estimated time in minutes to complete 
+the task, and must be a multiple of 30, with a maximum of 240.
 - The 'description' field must be a string describing the assignment or event.
 - The 'course' field must be a string representing the course code (e.g., "MAT135").
 - The 'due_date' field must be in the format YYYY-MM-DD.
 - The 'category' field must match exactly the respective category name of that item from the input.
+- The source text may come from a table, a bulleted list, or plain prose describing grade 
+weighting. The grading information may be formatted in any way. Read the whole document 
+carefully to find it regardless of its structure or heading name (e.g. "Marking Scheme", 
+"Grading Breakdown", "Assessment, Evaluation, and Grading", etc.). You may need to find the 
+respective due dates for each item in the syllabus, which may be listed in a separate table or section.
+- Find the "course" name in the syllabus, usually in the header or title section of the first page. If 
+the course name is not explicitly stated, use "Unknown Course" as the default value.
 
 Extraction Rules:
 Only create a card for discrete, dated, actionable items.
-Any item in the input object with an ongoing 'Due Date', written explicitly or implicitly e.g 
-'On-going', must not be included in the output JSON. If there is any other type of 'Due Date' 
-of an item, then that item must be included in the output, example 'Final Exam Period' as a 
-due-date must have a null value of 'due_date' in the output.
+Any item with an ongoing due date, written explicitly or implicitly (e.g. "Ongoing", "N/A", 
+weekly participation with no single deadline), must not be included in "items" at all.
+If an item has a real but currently-unscheduled due date (e.g. "Final Exam Period"), include 
+it in "items" with a null due_date.
 
-If an item has multiple due dates, example 'Quizzes' then split the 'Due Date' cell into N 
-separate items, one per date, not just per row, and index each item accordingly (Quiz 1, 
-Quiz 2 etc.).
+If an item has multiple due dates (e.g. weekly quizzes), split it into N separate items, one 
+per date, indexed accordingly (Quiz 1, Quiz 2, etc.).
 
-Items with no stated weight but a clear individual due date (e.g Surveys) still get a card.
+Items with no stated weight but a clear individual due date (e.g. Surveys) still get a card 
+and still get an entry in "categories" with percent: null.
+
+Tutorials, labs, and similar recurring meetings are not assignments unless the syllabus 
+explicitly describes graded, individually-submitted work tied to them.
 
 Determine the estimated_time of each item by yourself according to the assessment type or details; 
 be realistic and dont overestimate or underestimate. If unable to predict a proper value, then 
@@ -371,27 +399,38 @@ must not exceed 240.
 
 Worked Example:
 <example_input>
-[['Assessment', 'Percent', 'Details', 'Due Date'], ['Preparation checks', '5%', 'Average of all 
-except your lowest\nthree.', '2025-09-08,\n2025-09-15,\n2025-09-22,\n2025-09-29,\n2025-10-06,
-\n2025-10-13,\n2025-10-20,\n2025-11-03,\n2025-11-10,\n2025-11-17,\n2025-11-24'], 
-['MathMatize polls', '4%', 'Full marks for participating in at least\n80% of polls.', 'Ongoing'], 
-['Online assignments', '7%', 'Average of all except your lowest\none. Online assignments will be\n
-completed on WebWorK.', '2025-09-14,\n2025-09-21,\n2025-09-28,\n2025-10-12,\n2025-10-19,\n2025-10-26,
-\n2025-11-09,\n2025-11-23,\n2025-11-30'], ['Writing\nAssignments', '4%', 'There will be three "writing
-\nassignments" in the course. All three\nwill count towards your final grade.\nMore details will be 
-available on\nQuercus later.', '2025-10-12,\n2025-11-09,\n2025-11-30'], ['Term Test 1', '19%', 
-'If you write two term tests, your\nhighest test score will be worth 22%,\nand your lowest test score 
-will be\nworth 16% (for an average of 19%).\nTests are written 5:10-7pm on\nFridays.', '2025-10-03'], 
-['Term Test 2', '19%', 'If you write two term tests, your\nhighest test score will be worth 22%,\nand 
-your lowest test score will be\nworth 16% (for an average of 19%).\nTests are written 5:10-7pm on\n
-Fridays.', '2025-11-14'], ['Surveys', '2%', 'There will be a start-of-course survey\nand an end-of-course 
-survey. You\nmust complete the surveys by the\ndue date to get the associated grade.', '2025-09-15,
-\n2025-12-01'], ['Final Assessment', '40%', 'Cumulative Final Exam. You must\nobtain a minimum grade of 
-35% on\nthe final exam in order to pass the\ncourse.', 'Final Exam Period']]
+Marking Scheme
+Assessment Percent Details Due Date
+Preparation checks 5% Average of all except your lowest 
+three. 
+2025-09-08, 
+2025-09-15, 
+2025-09-22
+MathMatize polls 4% Full marks for participating in at least 
+80% of polls. 
+Ongoing
+Online assignments 7% Average of all except your lowest 
+one. Online assignments will be 
+completed on WebWorK. 
+2025-09-14, 
+2025-09-21
+Term Test 1 19% Tests are written 5:10-7pm on 
+Fridays. 
+2025-10-03
+Surveys 2% There will be a start-of-course survey
+and an end-of-course survey. 
+2025-09-15, 
+2025-12-01
+Final Assessment 40% Cumulative Final Exam. You must 
+obtain a minimum grade of 35% on 
+the final exam in order to pass the 
+course.
+Final Exam Period
 </example_input>
 
+
 <example_output>
-[{"course": "MAT135", "description": "Online Assignment 1", "due_date": "2025-09-14", "estimated_time": 60, "category": "Online assignments"}, {"course": "MAT135", "description": "Online Assignment 2", "due_date": "2025-09-21", "estimated_time": 60, "category": "Online assignments"}, {"course": "MAT135", "description": "Online Assignment 3", "due_date": "2025-09-28", "estimated_time": 60, "category": "Online assignments"}, {"course": "MAT135", "description": "Final Assessment", "due_date": null, "estimated_time": 120, "category": "Final Assessment"}]
+{"categories": [{"name": "Preparation checks", "percent": 5.0}, {"name": "Online assignments", "percent": 7.0}, {"name": "Term Test 1", "percent": 19.0}, {"name": "Surveys", "percent": 2.0}, {"name": "Final Assessment", "percent": 40.0}], "items": [{"course": "MAT135", "description": "Preparation Check 1", "due_date": "2025-09-08", "estimated_time": 30, "category": "Preparation checks"}, {"course": "MAT135", "description": "Preparation Check 2", "due_date": "2025-09-15", "estimated_time": 30, "category": "Preparation checks"}, {"course": "MAT135", "description": "Preparation Check 3", "due_date": "2025-09-22", "estimated_time": 30, "category": "Preparation checks"}, {"course": "MAT135", "description": "Online Assignment 1", "due_date": "2025-09-14", "estimated_time": 60, "category": "Online assignments"}, {"course": "MAT135", "description": "Online Assignment 2", "due_date": "2025-09-21", "estimated_time": 60, "category": "Online assignments"}, {"course": "MAT135", "description": "Term Test 1", "due_date": "2025-10-03", "estimated_time": 120, "category": "Term Test 1"}, {"course": "MAT135", "description": "Survey 1", "due_date": "2025-09-15", "estimated_time": 30, "category": "Surveys"}, {"course": "MAT135", "description": "Survey 2", "due_date": "2025-12-01", "estimated_time": 30, "category": "Surveys"}, {"course": "MAT135", "description": "Final Assessment", "due_date": null, "estimated_time": 120, "category": "Final Assessment"}]}
 </example_output>
 """
 
@@ -495,19 +534,108 @@ def _strip_markdown_fence(text: str):
     return res
 
 
+def extract_text_from_pdf(file: io.BytesIO) -> str:
+    res = ""
+    with pdfplumber.open(file) as pdf:
+        for page in pdf.pages:
+            res += (page.extract_text() or "") + "\n"
+
+    return res
 
 
-import io
+
+def _paragraph_text(paragraph) -> str:
+    """Get all text in a paragraph, including text nested inside
+    content controls, hyperlinks, or other wrapping elements."""
+    return "".join(node.text or "" for node in paragraph._p.iter(qn('w:t')))
+
+
+def _iter_block_items(parent):
+    """
+    Yield each paragraph and table child within `parent`, in order.
+    `parent` is typically a Document object or a TableCell object.
+    """
+    if isinstance(parent, DocumentClass):
+        parent_elm = parent.element.body
+    elif hasattr(parent, '_tc'):
+        parent_elm = parent._tc
+    else:
+        raise TypeError('Unsupported parent type')
+
+    for child in parent_elm.iterchildren():
+        if child.tag.endswith('p'):
+            yield Paragraph(child, parent)
+        elif child.tag.endswith('tbl'):
+            yield Table(child, parent)
+
+
+def extract_text_from_docx(file: io.BytesIO) -> str:
+    doc = Document(file)
+    document_text = ""
+
+    # for child in doc.element.body.iterchildren():
+    #     print(f"Child tag: {child.tag}")
+
+
+    for block in _iter_block_items(doc):
+        if isinstance(block, Paragraph):
+            document_text += _paragraph_text(block) + "\n"
+        elif isinstance(block, Table):
+            # recursively extract all text from the table cells in order
+            for row in block.rows:
+                for cell in row.cells:
+                    for cell_block in _iter_block_items(cell):
+                        if isinstance(cell_block, Paragraph):
+                            document_text += _paragraph_text(cell_block) + " "
+                document_text += "\n"  # new line after each row
+
+    return document_text.strip()  # Remove any trailing whitespace
+
+
+
+
 
 
 @app.post("/uploadfile/", response_model=SyllabusImportResult)
-async def create_upload_file(file: UploadFile, user_id: int = Depends(get_current_user_id)):
+async def create_upload_file(uploaded_file: UploadFile, user_id: int = Depends(get_current_user_id)):
     ##########################################
     # API Integration
     ##########################################
-    binary_stream = io.BytesIO(await file.read())
 
-    cleaned_rows = extract_tables_from_pdf(binary_stream)
+    # cleaned_rows = extract_tables_from_pdf(binary_stream)
+    if uploaded_file.content_type == "application/pdf":
+        file = io.BytesIO(await uploaded_file.read())
+
+        content = f"Analyze the text wrapped inside the XML tags below and execute the extraction rules: <syllabus_text> {extract_text_from_pdf(file)} </syllabus_text>"
+    elif uploaded_file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        file = io.BytesIO(await uploaded_file.read())
+        syllabus_text = extract_text_from_docx(file)
+        content = f"Analyze the text wrapped inside the XML tags below and execute the extraction rules: <syllabus_text> {syllabus_text} </syllabus_text>"
+    elif uploaded_file.content_type in ("image/png", "image/jpeg", "image/jpg"):
+        # No local extraction at all. Pass the image bytes straight to Claude.
+        image_bytes = await uploaded_file.read()
+        image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+        
+        content = [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": uploaded_file.content_type,  # e.g "image/png"
+                    "data": image_b64
+                }
+            },
+            {
+                "type": "text",
+                "text": "Analyze the syllabus image above and execute the extraction rules"
+            }
+        ]
+    else:
+        raise HTTPException(status_code=415, detail=f"Unsupported file type: {uploaded_file.content_type}")
+
+
+    # print(f"Raw text sent to Claude: length {len(syllabus_text)} chars:\n{syllabus_text[:500]}\n")
+
 
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -517,7 +645,7 @@ async def create_upload_file(file: UploadFile, user_id: int = Depends(get_curren
         system=CLAUDE_PROMPT,
         messages = [{
             "role": "user",
-            "content": (f"Analyze the text wrapped inside the XML tags below and execute the extraction rules: <syllabus_text> {json.dumps(cleaned_rows)} </syllabus_text>")
+            "content": content
         }]
     )
 
@@ -527,23 +655,30 @@ async def create_upload_file(file: UploadFile, user_id: int = Depends(get_curren
 
     try:
         # Parse the cards in json
-        cards_list = json.loads(cards_list)
+        parsed = json.loads(cards_list)
     except json.JSONDecodeError:
+        # print(f"Failed to parse JSON: {cards_list}\n")
         raise HTTPException(status_code=502, detail="Failed to parse the entire output batch.")
 
-    # Map each category like "Online Assignments" with their weightage / percent
-    category_percent_dict = _category_percent(cleaned_rows)
+
+    # print(f"Parsed JSON: {parsed}\n")
+
+    categories = parsed["categories"]
+    items = parsed["items"]
+
+    # Map each category name to its percent / total weightage
+    category_percent_dict = {c["name"]: c["percent"] for c in categories}
 
     # Creating a dict to count the number of items in each category
     category_count_dict = {}
-    for item in cards_list:
+    for item in items:
         category_count_dict[item["category"].replace("\n", " ").strip()] = category_count_dict.get(item["category"].replace("\n", " ").strip(), 0) + 1
 
 
     created_items = []
     skipped_items = []
 
-    for item in cards_list:
+    for item in items:
         category = item["category"].replace("\n", " ").strip()
         percent = category_percent_dict.get(category)
         count = category_count_dict.get(category)
@@ -583,6 +718,8 @@ async def create_upload_file(file: UploadFile, user_id: int = Depends(get_curren
 
 
     return SyllabusImportResult(created=updated_items, skipped=skipped_items)
+
+
 
 
 

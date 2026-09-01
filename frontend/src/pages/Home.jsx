@@ -1,6 +1,6 @@
 import TaskCard from "../components/TaskCard"
-import {useState, useEffect, useContext} from "react"
-import {getTasks, createTask, updateCompleted, updateTask} from "../services/api"
+import {useState, useEffect, useContext, useRef} from "react"
+import {getTasks, createTask, updateCompleted, updateTask, importSyllabus} from "../services/api"
 import "/Users/macblu/Downloads/VS Code Projects/Full-Stack Study Planner/frontend/src/Home.css"
 import {AuthContext} from "../services/AuthContext"
 import { motion, AnimatePresence } from "framer-motion"
@@ -56,13 +56,20 @@ function Home() {
   const [isModalOpen, setIsModalOpen]   = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingTaskId, setEditingTaskId] = useState(null)
+
+  // Syllabus Import States
+  const [isImporting, setIsImporting] = useState(false);
+  const [lastImportResult, setLastImportResult] = useState([]) // to show what got skipped, if anything
+  const [isImportResultModalOpen, setIsImportResultModalOpen] = useState(null)
  
   // Add Task form fields
-  const [titleQuery, setTitleQuery]           = useState("")
+  const [courseQuery, setCourseQuery]           = useState("")
   const [descriptionQuery, setDescriptionQuery] = useState("")
   const [duedateQuery, setDueDateQuery]       = useState("")
   const [priorityQuery, setPriorityQuery]     = useState("medium")
+  const [estimatedTimeQuery, setEstimatedTimeQuery] = useState("30") // New state for estimated time
  
+
 
   // Log out functionality
   const { logout } = useContext(AuthContext)
@@ -70,7 +77,33 @@ function Home() {
     logout()
   }
 
+  // Syllabus Import Functionality
+  const fileInputRef = useRef(null)
 
+  const handleSyllabusUpload = async (event) => {
+    event.preventDefault()
+    setIsImporting(true)
+    try {
+      const response = await importSyllabus(event.target.files[0])
+      setTasks(prevItems => [...prevItems, ...response.created])
+      setLastImportResult(response)
+      setIsImportResultModalOpen(true)
+    }
+    catch (err) {
+      if (err.message === "Unauthorized. Please log in.") {
+        logout()
+        setError("Unauthorized. Please log in.")
+      }
+      else {
+        setError(`Failed to import document: ${err.message}`)
+      }
+    }
+    finally {
+      setIsImporting(false)
+    }
+  }
+
+  
   useEffect(() => {
     const loadStoredTasks = async () => {
       try {
@@ -96,7 +129,7 @@ function Home() {
     try {
       // POST operation on the backend:
       // returns TaskPublic with an id and 'completed' is false by default
-      const task = await createTask(titleQuery, descriptionQuery, duedateQuery, priorityQuery, false)
+      const task = await createTask(courseQuery, descriptionQuery, duedateQuery, priorityQuery, estimatedTimeQuery, false)
       // Didnt delete the task's id as .map() uses task.id as the 'key' prop on each TaskCard
       // Correct way to append: Spreads previous items and appends new task
       // Updating setTasks rerenders the entire Home component
@@ -141,10 +174,11 @@ function Home() {
   const handleOpenEditModal = (task) => {
     setIsEditModalOpen(true)
     setEditingTaskId(task.id)
-    setTitleQuery(task.title)
+    setCourseQuery(task.course)
     setDescriptionQuery(task.description)
     setDueDateQuery(task.due_date)
     setPriorityQuery(task.priority)
+    setEstimatedTimeQuery(task.estimated_time)
   }
 
 
@@ -153,7 +187,7 @@ function Home() {
     event.preventDefault()
     try {
       // use the id stored in the state editingTaskId
-      const task = await updateTask(editingTaskId, titleQuery, descriptionQuery, duedateQuery, priorityQuery)
+      const task = await updateTask(editingTaskId, courseQuery, descriptionQuery, duedateQuery, priorityQuery, estimatedTimeQuery)
       setTasks(prevTasks => prevTasks.map(t => t.id === editingTaskId ? task : t))
       closeModal()
     } catch (err) {
@@ -179,10 +213,16 @@ function Home() {
     // set fields to blank
     setIsModalOpen(false)
     setIsEditModalOpen(false)
-    setTitleQuery("")
+    setCourseQuery("")
     setDescriptionQuery("")
     setDueDateQuery("")
     setPriorityQuery("medium")
+    setEstimatedTimeQuery("30")
+  }
+
+  const closeImportResultModal = () => {
+    setLastImportResult(null)
+    setIsImportResultModalOpen(false)
   }
   
   const getAdjustedDate = (dateString) => {
@@ -246,7 +286,37 @@ function Home() {
           />
         </form>
       </div>
- 
+
+      <div className="floating-import-container">
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept=".pdf,.docx,.png,.jpg,.jpeg"
+          style={{ display: "none" }}
+          onChange={handleSyllabusUpload}
+        />
+        <motion.button
+          whileHover={{ scale: isImporting ? 1 : 1.05 }}
+          whileTap={{ scale: isImporting ? 1 : 0.95 }}
+          className="btn-import-syllabus"
+          onClick={() => fileInputRef.current.click()}
+          disabled={isImporting}
+        >
+          {isImporting ? (
+          <>
+            <span className="spinner" />
+            <span>Importing...</span>
+          </>
+          ) : (
+            <>
+              <span>📥</span>
+              <span>Import Syllabus</span>
+            </>
+          )}
+        </motion.button>
+      </div>
+
+
       {/* ── Error ── */}
       {error && <div className="error-message">{error}</div>}
  
@@ -269,7 +339,7 @@ function Home() {
             >
               <AnimatePresence mode="popLayout">
                 {/* Filter tasks based on search query and map to TaskCard components */}
-                {todoTasks.filter((t) => t.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                {todoTasks.filter((t) => t.course.toLowerCase().includes(searchQuery.toLowerCase()))
                 .map((task) => {
                   // Overdue check
                   let isOverdue = false
@@ -314,7 +384,7 @@ function Home() {
             >
               <AnimatePresence mode="popLayout">
                 {/* Filter tasks based on search query and map to TaskCard components */}
-                {tasks.filter((t) => t.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                {tasks.filter((t) => t.course.toLowerCase().includes(searchQuery.toLowerCase()))
                 .filter((t) => t.completed)
                 .map((task) => (
                   <motion.div
@@ -371,14 +441,14 @@ function Home() {
    
               <form onSubmit={handleAddTask} className="modal-form">
                 <div className="form-group">
-                  <label htmlFor="task-title">Title</label>
+                  <label htmlFor="task-title">Course</label>
                   <input
                     id="task-title"
                     type="text"
-                    placeholder="e.g. Assignment 2"
-                    value={titleQuery}
+                    placeholder="e.g. CSC148"
+                    value={courseQuery}
                     // Updates the state from an input element
-                    onChange={(e) => setTitleQuery(e.target.value)}
+                    onChange={(e) => setCourseQuery(e.target.value)}
                     required
                   />
                 </div>
@@ -414,6 +484,26 @@ function Home() {
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="task-estimatedtime">Estimated Time</label>
+                  <select
+                    id="task-estimatedtime"
+                    value={estimatedTimeQuery}
+                    onChange={(e) => setEstimatedTimeQuery(e.target.value)}
+                  >
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="90">1.5 hours</option>
+                    <option value="120">2 hours</option>
+                    <option value="150">2.5 hours</option>
+                    <option value="180">3 hours</option>
+                    <option value="210">3.5 hours</option>
+                    <option value="240">4 hours</option>
+
+
                   </select>
                 </div>
    
@@ -455,14 +545,14 @@ function Home() {
    
               <form onSubmit={handleEditTask} className="modal-form">
                 <div className="form-group">
-                  <label htmlFor="task-title">Title</label>
+                  <label htmlFor="task-title">Course</label>
                   <input
                     id="task-title"
                     type="text"
-                    placeholder={titleQuery}
-                    value={titleQuery}
+                    placeholder={courseQuery}
+                    value={courseQuery}
                     // Updates the state from an input element
-                    onChange={(e) => setTitleQuery(e.target.value)}
+                    onChange={(e) => setCourseQuery(e.target.value)}
                     required
                   />
                 </div>
@@ -502,6 +592,25 @@ function Home() {
                     <option value="high">High</option>
                   </select>
                 </div>
+
+                <div className="form-group">
+                  <label htmlFor="task-estimatedtime">Estimated Time</label>
+                  <select
+                    id="task-estimatedtime"
+                    value={estimatedTimeQuery}
+                    onChange={(e) => setEstimatedTimeQuery(e.target.value)}
+                  >
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="90">1.5 hours</option>
+                    <option value="120">2 hours</option>
+                    <option value="150">2.5 hours</option>
+                    <option value="180">3 hours</option>
+                    <option value="210">3.5 hours</option>
+                    <option value="240">4 hours</option>
+
+                  </select>
+                </div>
    
                 <motion.button 
                   whileHover={{ scale: 1.02 }}
@@ -512,6 +621,91 @@ function Home() {
                   Edit Task
                 </motion.button>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ── Import Syllabus Result Modal ── */}
+        {isImportResultModalOpen && (
+          <motion.div 
+            className="modal-overlay" 
+            variants={modalBackdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={closeImportResultModal}
+          >
+            <motion.div 
+              className="modal" 
+              variants={modalWindowVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h2>Import Result Summary</h2>
+                <button className="modal-close" onClick={closeImportResultModal}>✕</button>
+              </div>
+
+              <div className="modal-body">
+                <div className="summary-section">
+                  <h3>
+                    Tasks Created:
+                    <span className="count-badge">{lastImportResult?.created?.length || 0}</span>
+                  </h3>
+
+                  <div className="created-tasks-list">
+                    {lastImportResult?.created && lastImportResult.created.length > 0 ? (
+                    lastImportResult.created.map((task) => (
+                      <div key={task.id} className={`task-card ${task.priority}`}>
+                      <div className="task-card-header">
+                        <span className="course-tag">{task.course}</span>
+                        <span className={`priority-badge ${task.priority}`}>{task.priority}</span>
+                      </div>
+
+                      <h4 className="task-title">{task.description}</h4>
+
+                      <div className="task-meta">
+                        <span>
+                          📅 {task.due_date ? task.due_date : "TBA"}
+                        </span>
+                        <span>
+                          ⏱️ {task.estimated_time} mins
+                        </span>
+                      </div>
+                    </div>
+                    ))
+                  ) : (
+                    <p className="empty-message">No tasks were created.</p>
+                  )}
+                  </div>
+
+                  {lastImportResult?.skipped?.length > 0 ? (
+                    <div className="summary-section skipped-section">
+                      <h3>
+                        Skipped Items:
+                        <span className="count-badge">{lastImportResult?.skipped?.length || 0}</span>  
+                      </h3>
+                      <ul>
+                        {lastImportResult.skipped.map((item, index) => (
+                          <li key={index}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p>Note: All task cards were successfully created.</p>
+                  )
+                }
+                </div>
+              </div>
+                  
+              <div className="modal-footer">
+                <button className="btn-primary" onClick={closeImportResultModal}>
+                  Done
+                </button>
+              </div>
+
             </motion.div>
           </motion.div>
         )}

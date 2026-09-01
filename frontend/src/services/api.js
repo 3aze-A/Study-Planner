@@ -21,6 +21,7 @@ export const getTasks = async () => {
     // if there is no token, ...getAuthHead() spreads an empty {} into nothing, and so
     // the request goes out without an Authorization header and hits the backend's 401 error.
 
+    // if the token is expired, the backend will also return 401 Unauthorized
     if (response.status === 401) {
         throw new Error("Unauthorized. Please log in.")
     }
@@ -32,7 +33,7 @@ export const getTasks = async () => {
     return await response.json()
 }
 
-export const createTask = async (title, description, duedate, priority, completed) => {
+export const createTask = async (course, description, duedate, priority, estimated_time, completed) => {
     try {
         const response = await fetch(TASKS_URL, {
             method: "POST",
@@ -42,11 +43,12 @@ export const createTask = async (title, description, duedate, priority, complete
             },
             // field names must match exactly with the ones in database (case-sensitive)
             body : JSON.stringify({
-                title: title,
+                course: course,
                 description: description,
                 due_date: duedate,
                 priority: priority,
-                completed: Boolean(completed)
+                completed: Boolean(completed),
+                estimated_time: estimated_time
             })
         })
 
@@ -94,7 +96,7 @@ export const updateCompleted = async (task_id, is_completed) => {
 }
 
 
-export const updateTask = async (task_id, title, description, duedate, priority, completed) => {
+export const updateTask = async (task_id, course, description, duedate, priority, estimated_time) => {
     try {
         const response = await fetch(`${TASKS_URL}/${task_id}`, {
             method: "PATCH",
@@ -104,11 +106,11 @@ export const updateTask = async (task_id, title, description, duedate, priority,
             },
             // field names must match exactly with the ones in database (case-sensitive)
             body : JSON.stringify({
-                title: title,
+                course: course,
                 description: description,
                 due_date: duedate,
                 priority: priority,
-                completed: Boolean(completed)
+                estimated_time: estimated_time
             })
         })
 
@@ -164,5 +166,29 @@ export const registerUser = async (email, password) => {
         throw new Error(errorData.detail || "Registration failed.")
     }
     
+    return await response.json()
+}
+
+export const importSyllabus = async(file) => {
+    const formData = new FormData();
+    formData.append("uploaded_file", file);
+
+    const response = await fetch(`${BASE_URL}/uploadfile/`, {
+        method: 'POST',
+        headers: {
+            ...getAuthHead()
+        },
+        body: formData
+    })
+
+    if (response.status == 401) {
+        throw new Error("Unauthorized. Please log in.")
+    }
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail)
+    }
+
     return await response.json()
 }

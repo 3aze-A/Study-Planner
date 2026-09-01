@@ -1,6 +1,7 @@
 import {deleteTask} from "../services/api"
-import {useState} from 'react'
+import {useState, useContext} from 'react'
 import "/Users/macblu/Downloads/VS Code Projects/Full-Stack Study Planner/frontend/src/TaskCard.css"
+import { AuthContext } from "../services/AuthContext"
 
 // @ts-check
 
@@ -8,6 +9,8 @@ import "/Users/macblu/Downloads/VS Code Projects/Full-Stack Study Planner/fronte
 // @ts-ignore
 
 function TaskCard({ task, onDelete, onError, onCompleted, isOverdue, onEdit }) { // task is an object/dict
+
+  const { logout } = useContext(AuthContext) // Access the logout function from AuthContext
 
   const handleCheckboxChange = (event) => {
     const newValue = event.target.checked
@@ -37,7 +40,7 @@ function TaskCard({ task, onDelete, onError, onCompleted, isOverdue, onEdit }) {
     if (task.due_date) {
       const dueDateParts = task.due_date.split('-')
       const year = Number(dueDateParts[0]);     // Returns the 4-digit year (e.g., 2026)
-      const month = Number(dueDateParts[1]) - 1;   // Returns 0-11 (getMonth() is 0-indexed, Jan is 0)
+      const month = Number(dueDateParts[1]) - 1;   // dueDateParts[1] is indexed 1-12, but month is supposed to be 0-11
       const day = Number(dueDateParts[2]);
         
       const options = { 
@@ -48,6 +51,7 @@ function TaskCard({ task, onDelete, onError, onCompleted, isOverdue, onEdit }) {
       };
 
       const formattedDate = new Date(year, month, day)
+      // newDate type is string, formattedDate type is Date. Use toLocaleDateString to convert Date to string in the desired format.
       newDate = formattedDate.toLocaleDateString('en-US', options)  
     }
   return (
@@ -70,8 +74,8 @@ function TaskCard({ task, onDelete, onError, onCompleted, isOverdue, onEdit }) {
  
       {/* ── Body: title, date, description (on hover) ── */}
       <div className="task-card-body">
-        <h3 className="task-title">{task.title}</h3>
-        <p className="task-date">📅 {newDate}</p>
+        <h3 className="task-title">{task.course}</h3>
+        <p className="task-date">📅 {newDate} | Estimated Time: {task.estimated_time} minutes</p>
         <p className="task-description">{task.description}</p>
       </div>
  
