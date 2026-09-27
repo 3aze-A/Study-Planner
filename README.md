@@ -102,11 +102,8 @@ Stage 1: core CRUD, frontend-backend integration, and UI polish.
 
 Stage 2 (completed):
 - User authentication
-
-Stage 2 (next):
-<!-- TODO: list planned stage 2 features here, e.g. categories/tags/filter, recurring tasks, calendar view, deployment -->
 - AI Recommendation system
 
 ## Project Status
 
-Stage 1 and part 1 of stage 2 complete. Actively developing stage 2's next features.
+Stage 1 and stage 2 complete. Will add more features.
