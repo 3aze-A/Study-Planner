@@ -29,14 +29,6 @@ import base64
 # uvicorn main:app --reload
 # fastapi dev main.py
 
-
-
-# something@gmail.com, pwd123
-# example@gmail.com, pwd456
-# alifazal@gmail.com, pwd789
-
-
-
 # SQL Model setup
 """
 Notes:
@@ -181,11 +173,12 @@ class TaskUpdate(SQLModel):
 
 
 
-sqlite_file_name = "database.db"  
-sqlite_url = f"sqlite:///{sqlite_file_name}"
-connect_args = {"check_same_thread": False}
-engine = create_engine(sqlite_url, echo=True, connect_args=connect_args)
-
+# sqlite_file_name = "database.db"  
+# sqlite_url = f"sqlite:///{sqlite_file_name}"
+# connect_args = {"check_same_thread": False}
+# engine = create_engine(sqlite_url, echo=True, connect_args=connect_args)
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL, echo=True, pool_pre_ping=True)
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
