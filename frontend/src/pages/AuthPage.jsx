@@ -1,6 +1,6 @@
 import {useContext, useState} from "react"
 import {AuthContext} from "../services/AuthContext"
-import "/Users/macblu/Downloads/VS Code Projects/Full-Stack Study Planner/frontend/src/AuthPage.css"
+import "../AuthPage.css"
 
 function AuthPage() {
     const { login, register } = useContext(AuthContext)

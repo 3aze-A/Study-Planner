@@ -1,7 +1,7 @@
 import TaskCard from "../components/TaskCard"
 import {useState, useEffect, useContext, useRef} from "react"
 import {getTasks, createTask, updateCompleted, updateTask, importSyllabus} from "../services/api"
-import "/Users/macblu/Downloads/VS Code Projects/Full-Stack Study Planner/frontend/src/Home.css"
+import "../Home.css"
 import {AuthContext} from "../services/AuthContext"
 import { motion, AnimatePresence } from "framer-motion"
 

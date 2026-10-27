@@ -1,6 +1,6 @@
 import {deleteTask} from "../services/api"
 import {useState, useContext} from 'react'
-import "/Users/macblu/Downloads/VS Code Projects/Full-Stack Study Planner/frontend/src/TaskCard.css"
+import "../TaskCard.css"
 import { AuthContext } from "../services/AuthContext"
 
 // @ts-check
