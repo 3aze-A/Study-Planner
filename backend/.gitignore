@@ -12,6 +12,8 @@ venv/
 # Remove the .env
 .env
 
+database.db
+
 # Distribution / packaging
 .Python
 build/
