@@ -196,7 +196,7 @@ app = FastAPI(lifespan=lifespan)
 # Allowing certain origins to share resources
 # Allowing the frontend to connect to the backend
 origins = [
-    "http://localhost:5173"
+    "http://localhost:5173", "https://study-planner-sigma-one.vercel.app"
 ]
 
 app.add_middleware(
